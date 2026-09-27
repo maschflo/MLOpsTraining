@@ -1,0 +1,39 @@
+artifact_path: file:C:/Users/Florian Mascher/PycharmProjects/MLOpsTraining/mlruns/3/models/m-d5db9314a284473584f4d39abcdf1949/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.skops
+    predict_fn: predict
+    python_version: 3.14.0
+  sklearn:
+    code: null
+    pickled_model: model.skops
+    serialization_format: skops
+    sklearn_version: 1.9.1
+    skops_trusted_types:
+    - sklearn.tree._tree.Tree
+is_signature_from_type_hint: false
+mlflow_version: 3.16.1
+model_id: m-d5db9314a284473584f4d39abcdf1949
+model_size_bytes: 10713966
+model_uuid: m-d5db9314a284473584f4d39abcdf1949
+prompts: null
+run_id: ce50ca689e2b4887b94ff7f45bee45f3
+saved_input_example_info:
+  artifact_path: input_example.json
+  pandas_orient: split
+  serving_input_path: serving_input_example.json
+  type: dataframe
+signature:
+  inputs: '[{"type": "double", "name": "Air temperature [K]", "required": true}, {"type":
+    "double", "name": "Process temperature [K]", "required": true}, {"type": "long",
+    "name": "Rotational speed [rpm]", "required": true}, {"type": "double", "name":
+    "Torque [Nm]", "required": true}, {"type": "long", "name": "Tool wear [min]",
+    "required": true}, {"type": "string", "name": "Type", "required": true}]'
+  outputs: '[{"type": "long", "required": true}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-09-27 14:03:30.917831'

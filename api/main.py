@@ -1,13 +1,16 @@
+from datetime import datetime
 import json
 import os
+from datetime import timezone
+from pathlib import Path
 from typing import Literal
 from fastapi import FastAPI, Request
 import mlflow
 from mlflow import MlflowClient
 from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
+import logging
 import pandas as pd
-
 
 FEATURE_MAP = {"air_temp": "Air temperature [K]", "process_temp": "Process temperature [K]",
                "rot_speed": "Rotational speed [rpm]", "torque": "Torque [Nm]", "tool_wear": "Tool wear [min]",
@@ -18,7 +21,7 @@ class MachineReading(BaseModel):
     process_temp: float = Field(gt=0)
     rot_speed: float = Field(gt=0)
     torque: float = Field(gt=0)
-    tool_wear: float = Field(gt=0)
+    tool_wear: float = Field(ge=0)
     product_type: Literal["L", "M", "H"]
 
 class PredictionResponse(BaseModel):
@@ -31,6 +34,15 @@ class PredictionResponse(BaseModel):
 async def lifespan(app: FastAPI):
     if "MLFLOW_TRACKING_URI" not in os.environ:
         mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    prediction_log_path = os.environ.get("PREDICTION_LOG_PATH", Path(__file__).resolve().parent.parent / "logs/prediction.jsonl")
+    os.makedirs(os.path.dirname(prediction_log_path), exist_ok=True)
+    logger = logging.getLogger("prediction_log")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    fh = logging.FileHandler(prediction_log_path, encoding="utf-8")
+    fh.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(fh)
+    app.state.prediction_logger = logger
     try:
         model_name = os.environ.get("MODEL_NAME", "ai4i-failure")
         model_alias = os.environ.get("MODEL_ALIAS", "champion")
@@ -53,11 +65,26 @@ async def lifespan(app: FastAPI):
             f"from tracking URI '{mlflow.get_tracking_uri()}'") from e
     yield
 
+    logger .removeHandler(fh)
+    fh.close()
 app = FastAPI(lifespan=lifespan)
 
 def map_data(machine_reading: MachineReading):
     row = {FEATURE_MAP[k]: v for k, v in machine_reading.model_dump().items()}
     return pd.DataFrame([row])
+
+def log_prediction(reading: MachineReading, request: Request, proba: float):
+   request.app.state.prediction_logger.info(json.dumps({
+       "timestamp": datetime.now(timezone.utc).isoformat(),
+       "model_version": request.app.state.model_version,
+       "threshold": request.app.state.threshold,
+       "input": reading.model_dump(),
+       "failure_probability": proba,
+       "failure_predicted": proba >= request.app.state.threshold
+
+   })
+   )
+
 @app.get("/")
 def hello_world():
     return {"message": "Hello World"}
@@ -68,6 +95,8 @@ def predict(reading: MachineReading, request: Request):
     X = map_data(reading)
 
     proba = float(state.model.predict_proba(X)[0, 1])
+
+    log_prediction(reading, request, proba)
 
     return PredictionResponse(
         failure_probability=proba,
